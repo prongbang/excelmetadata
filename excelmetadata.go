@@ -197,14 +197,16 @@ type Hyperlink struct {
 
 // ImageMetadata represents image information
 type ImageMetadata struct {
-	Cell      string       `json:"cell"`
-	File      []byte       `json:"file"`
-	Extension string       `json:"extension"`
-	Format    *ImageFormat `json:"format"`
+	Cell       string       `json:"cell"`
+	File       []byte       `json:"file"`
+	Extension  string       `json:"extension"`
+	InsertType byte         `json:"insertType"`
+	Format     *ImageFormat `json:"format"`
 }
 
 type ImageFormat struct {
 	AltText             string
+	PrintObject         *bool
 	Locked              *bool
 	LockAspectRatio     bool
 	AutoFit             bool
@@ -534,13 +536,15 @@ func (e *Extractor) extractImages(sheetName string) []ImageMetadata {
 			// Use index to avoid issues with range variable
 			for _, picture := range pictures {
 				img := ImageMetadata{
-					Cell:      cellAddr,
-					File:      picture.File,
-					Extension: picture.Extension,
+					Cell:       cellAddr,
+					File:       picture.File,
+					Extension:  picture.Extension,
+					InsertType: byte(picture.InsertType),
 				}
 				if picture.Format != nil {
 					img.Format = &ImageFormat{
 						AltText:             picture.Format.AltText,
+						PrintObject:         picture.Format.PrintObject,
 						Locked:              picture.Format.Locked,
 						LockAspectRatio:     picture.Format.LockAspectRatio,
 						AutoFit:             picture.Format.AutoFit,
