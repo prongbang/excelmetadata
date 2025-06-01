@@ -3,6 +3,7 @@ package excelmetadata
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -509,50 +510,48 @@ func (e *Extractor) extractCellData(sheetName string) ([]CellMetadata, error) {
 func (e *Extractor) extractImages(sheetName string) []ImageMetadata {
 	var images []ImageMetadata
 
-	rows, err := e.file.GetRows(sheetName)
+	cellAddress, err := e.file.GetPictureCells(sheetName)
 	if err != nil {
 		return images
 	}
-
-	for rowIdx, row := range rows {
-		for colIdx := range row {
-			col, _ := excelize.ColumnNumberToName(colIdx + 1)
-			cellAddr := fmt.Sprintf("%s%d", col, rowIdx+1)
-
-			// GetPictures returns ([]Picture, error)
-			pictures, err := e.file.GetPictures(sheetName, cellAddr)
-			if err != nil {
-				continue
-			}
-
-			// Use index to avoid issues with range variable
-			for _, picture := range pictures {
-				img := ImageMetadata{
-					Cell:       cellAddr,
-					File:       picture.File,
-					Extension:  picture.Extension,
-					InsertType: byte(picture.InsertType),
-				}
-				if picture.Format != nil {
-					img.Format = &ImageFormat{
-						AltText:             picture.Format.AltText,
-						PrintObject:         picture.Format.PrintObject,
-						Locked:              picture.Format.Locked,
-						LockAspectRatio:     picture.Format.LockAspectRatio,
-						AutoFit:             picture.Format.AutoFit,
-						AutoFitIgnoreAspect: picture.Format.AutoFitIgnoreAspect,
-						OffsetX:             picture.Format.OffsetX,
-						OffsetY:             picture.Format.OffsetY,
-						ScaleX:              picture.Format.ScaleX,
-						ScaleY:              picture.Format.ScaleY,
-						Hyperlink:           picture.Format.Hyperlink,
-						HyperlinkType:       picture.Format.HyperlinkType,
-						Positioning:         picture.Format.Positioning,
-					}
-				}
-				images = append(images, img)
-			}
+	for _, cellAddr := range cellAddress {
+		// GetPictures returns ([]Picture, error)
+		pictures, err := e.file.GetPictures(sheetName, cellAddr)
+		if err != nil {
+			continue
 		}
+
+		// Use index to avoid issues with range variable
+		for _, picture := range pictures {
+			img := ImageMetadata{
+				Cell:       cellAddr,
+				File:       picture.File,
+				Extension:  picture.Extension,
+				InsertType: byte(picture.InsertType),
+			}
+			if picture.Format != nil {
+				img.Format = &ImageFormat{
+					AltText:             picture.Format.AltText,
+					PrintObject:         picture.Format.PrintObject,
+					Locked:              picture.Format.Locked,
+					LockAspectRatio:     picture.Format.LockAspectRatio,
+					AutoFit:             picture.Format.AutoFit,
+					AutoFitIgnoreAspect: picture.Format.AutoFitIgnoreAspect,
+					OffsetX:             picture.Format.OffsetX,
+					OffsetY:             picture.Format.OffsetY,
+					ScaleX:              picture.Format.ScaleX,
+					ScaleY:              picture.Format.ScaleY,
+					Hyperlink:           picture.Format.Hyperlink,
+					HyperlinkType:       picture.Format.HyperlinkType,
+					Positioning:         picture.Format.Positioning,
+				}
+			}
+			images = append(images, img)
+		}
+	}
+
+	for _, img := range images {
+		log.Println(img.Cell, len(img.File))
 	}
 
 	return images
