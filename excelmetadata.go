@@ -20,7 +20,6 @@ type Extractor struct {
 type Options struct {
 	IncludeCellData       bool
 	IncludeStyles         bool
-	IncludeComments       bool
 	IncludeImages         bool
 	IncludeDefinedNames   bool
 	IncludeDataValidation bool
@@ -32,7 +31,6 @@ func DefaultOptions() *Options {
 	return &Options{
 		IncludeCellData:       true,
 		IncludeStyles:         true,
-		IncludeComments:       true,
 		IncludeImages:         true,
 		IncludeDefinedNames:   true,
 		IncludeDataValidation: true,
@@ -182,12 +180,6 @@ type AlignmentStyle struct {
 type Protection struct {
 	Hidden bool `json:"hidden,omitempty"`
 	Locked bool `json:"locked,omitempty"`
-}
-
-// Comment represents a cell comment
-type Comment struct {
-	Author string `json:"author"`
-	Text   string `json:"text"`
 }
 
 // Hyperlink represents a cell hyperlink

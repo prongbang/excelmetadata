@@ -91,7 +91,6 @@ if err != nil {
 options := &excelmetadata.Options{
     IncludeCellData:       true,
     IncludeStyles:         true,
-    IncludeComments:       true,
     IncludeImages:         true,
     IncludeDefinedNames:   true,
     IncludeDataValidation: true,
@@ -169,7 +168,6 @@ type CellMetadata struct {
 |--------|-------------|---------|
 | `IncludeCellData` | Extract cell values and formulas | `true` |
 | `IncludeStyles` | Extract style information | `true` |
-| `IncludeComments` | Extract cell comments | `true` |
 | `IncludeImages` | Extract embedded images | `true` |
 | `IncludeDefinedNames` | Extract named ranges | `true` |
 | `IncludeDataValidation` | Extract data validation rules | `true` |
@@ -257,7 +255,6 @@ type CellMetadata struct {
 ## Limitations
 
 - Currently supports .xlsx files only (not .xls)
-- Comments extraction is defined but not implemented
 - Some advanced Excel features may not be captured
 - Images are extracted as binary data (base64 encoded in JSON)
 

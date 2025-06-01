@@ -69,7 +69,6 @@ func customOptionsExample() {
 	options := &excelmetadata.Options{
 		IncludeCellData:       true,
 		IncludeStyles:         true,
-		IncludeComments:       true,
 		IncludeImages:         false,
 		IncludeDefinedNames:   true,
 		IncludeDataValidation: true,
@@ -105,7 +104,6 @@ func saveToFileExample() {
 	options := &excelmetadata.Options{
 		IncludeCellData: false, // Only structure, no cell data
 		IncludeStyles:   false,
-		IncludeComments: false,
 		IncludeImages:   true,
 	}
 
@@ -283,7 +281,6 @@ func analyzeMetadataSize() {
 			opts: &excelmetadata.Options{
 				IncludeCellData: false,
 				IncludeStyles:   false,
-				IncludeComments: false,
 			},
 		},
 		{
@@ -291,7 +288,6 @@ func analyzeMetadataSize() {
 			opts: &excelmetadata.Options{
 				IncludeCellData: true,
 				IncludeStyles:   false,
-				IncludeComments: false,
 				IncludeImages:   false,
 			},
 		},
