@@ -21,7 +21,6 @@ A Go library for extracting comprehensive metadata from Excel files (.xlsx) usin
 - 🔗 **Rich Content Support**
   - Hyperlinks
   - Data validations
-  - Comments (Note: Comment extraction not implemented in current version)
   - Images with formatting details
   - Named ranges (defined names)
 

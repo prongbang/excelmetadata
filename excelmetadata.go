@@ -3,7 +3,6 @@ package excelmetadata
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -548,10 +547,6 @@ func (e *Extractor) extractImages(sheetName string) []ImageMetadata {
 			}
 			images = append(images, img)
 		}
-	}
-
-	for _, img := range images {
-		log.Println(img.Cell, len(img.File))
 	}
 
 	return images
