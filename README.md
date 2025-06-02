@@ -35,6 +35,18 @@ A Go library for extracting comprehensive metadata from Excel files (.xlsx) usin
 go get github.com/prongbang/excelmetadata
 ```
 
+### CLI
+
+```bash
+go install github.com/prongbang/excelmetadata/cmd/excelmetadata@v1.1.3
+```
+
+- Extraction
+
+```bash
+excelmetadata extract sample.xlsx -o sample.metadata.json
+```
+
 ## Requirements
 
 - Go 1.18 or higher
