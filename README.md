@@ -38,7 +38,7 @@ go get github.com/prongbang/excelmetadata
 ### CLI
 
 ```bash
-go install github.com/prongbang/excelmetadata/cmd/excelmetadata@v1.2.4
+go install github.com/prongbang/excelmetadata/cmd/excelmetadata@v1.2.5
 ```
 
 - Extraction
