@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -439,37 +440,37 @@ func (e *Extractor) ExtractToGO() (string, error) {
 			if val == nil {
 				return "nil"
 			}
-			return "&excelmetadata.SheetProtection" + marshalGo(*val, indent)
+			return "&" + marshalGo(*val, indent)
 		case *FontStyle:
 			if val == nil {
 				return "nil"
 			}
-			return "&excelmetadata.FontStyle" + marshalGo(*val, indent)
+			return "&" + marshalGo(*val, indent)
 		case *FillStyle:
 			if val == nil {
 				return "nil"
 			}
-			return "&excelmetadata.FillStyle" + marshalGo(*val, indent)
+			return "&" + marshalGo(*val, indent)
 		case *AlignmentStyle:
 			if val == nil {
 				return "nil"
 			}
-			return "&excelmetadata.AlignmentStyle" + marshalGo(*val, indent)
+			return "&" + marshalGo(*val, indent)
 		case *Protection:
 			if val == nil {
 				return "nil"
 			}
-			return "&excelmetadata.Protection" + marshalGo(*val, indent)
+			return "&" + marshalGo(*val, indent)
 		case *Hyperlink:
 			if val == nil {
 				return "nil"
 			}
-			return "&excelmetadata.Hyperlink" + marshalGo(*val, indent)
+			return "&" + marshalGo(*val, indent)
 		case *ImageFormat:
 			if val == nil {
 				return "nil"
 			}
-			return "&excelmetadata.ImageFormat" + marshalGo(*val, indent)
+			return "&" + marshalGo(*val, indent)
 		case StyleDetails:
 			s := "excelmetadata.StyleDetails{\n"
 			s += indent + "  Font: " + marshalGo(val.Font, indent+"  ") + ",\n"
@@ -589,7 +590,7 @@ func (e *Extractor) ExtractToGO() (string, error) {
 			s += indent + "  Value: " + marshalGo(val.Value, indent+"  ") + ",\n"
 			s += indent + "  Formula: " + marshalGo(val.Formula, indent+"  ") + ",\n"
 			s += indent + "  StyleID: " + marshalGo(val.StyleID, indent+"  ") + ",\n"
-			s += indent + "  Type: " + fmt.Sprintf("excelize.CellType(%q)", string(val.Type)) + ",\n"
+			s += indent + "  Type: " + strings.ReplaceAll(fmt.Sprintf("excelize.CellType('%q')", string(val.Type)), "\"", "") + ",\n"
 			s += indent + "  Hyperlink: " + marshalGo(val.Hyperlink, indent+"  ") + ",\n"
 			s += indent + "}"
 			return s
@@ -661,7 +662,7 @@ func (e *Extractor) ExtractToGO() (string, error) {
 	}
 
 	goStr := "metadata := &" + marshalGo(*metadata, "") + "\n\n"
-	goStr += "recreator = excelrecreator.New(metadata, nil)\n"
+	goStr += "recreator := excelrecreator.New(metadata, nil)\n"
 
 	return goStr, nil
 }
