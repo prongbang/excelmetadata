@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
+	"path/filepath"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -287,14 +290,408 @@ func (e *Extractor) ExtractToJSON(pretty bool) (string, error) {
 	return string(jsonData), nil
 }
 
-// ExtractToFile extracts metadata and saves it to a JSON file
-func (e *Extractor) ExtractToFile(outputPath string, pretty bool) error {
-	jsonStr, err := e.ExtractToJSON(pretty)
+// ExtractToGO extracts metadata and returns it as GO string
+func (e *Extractor) ExtractToGO() (string, error) {
+	metadata, err := e.Extract()
 	if err != nil {
+		return "", err
+	}
+
+	// Helper function to marshal Go values as Go code
+	var marshalGo func(v interface{}, indent string) string
+	marshalGo = func(v interface{}, indent string) string {
+		switch val := v.(type) {
+		case string:
+			return fmt.Sprintf("%q", val)
+		case time.Time:
+			return fmt.Sprintf("time.Date(%d, %d, %d, %d, %d, %d, %d, time.UTC)", val.Year(), val.Month(), val.Day(), val.Hour(), val.Minute(), val.Second(), val.Nanosecond())
+		case []byte:
+			return fmt.Sprintf("%#v", val)
+		case nil:
+			return "nil"
+		case bool:
+			return fmt.Sprintf("%v", val)
+		case int:
+			return fmt.Sprintf("%d", val)
+		case float64:
+			return fmt.Sprintf("%v", val)
+		case *string:
+			if val == nil {
+				return "nil"
+			}
+			return fmt.Sprintf("%v", *val)
+		case *bool:
+			if val == nil {
+				return "nil"
+			}
+			return fmt.Sprintf("%v", *val)
+		case map[int]float64:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "map[int]float64{"
+			for k, v := range val {
+				s += fmt.Sprintf("%d: %v, ", k, v)
+			}
+			s += "}"
+			return s
+		case map[string]float64:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "map[string]float64{"
+			for k, v := range val {
+				s += fmt.Sprintf("%q: %v, ", k, v)
+			}
+			s += "}"
+			return s
+		case map[int]StyleDetails:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "map[int]excelmetadata.StyleDetails{\n"
+			for k, v := range val {
+				s += fmt.Sprintf("%s%d: %s,\n", indent+"  ", k, marshalGo(v, indent+"  "))
+			}
+			s += indent + "}"
+			return s
+		case []string:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]string{"
+			for _, v := range val {
+				s += fmt.Sprintf("%q, ", v)
+			}
+			s += "}"
+			return s
+		case []int:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]int{"
+			for _, v := range val {
+				s += fmt.Sprintf("%d, ", v)
+			}
+			s += "}"
+			return s
+		case []SheetMetadata:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]excelmetadata.SheetMetadata{\n"
+			for _, v := range val {
+				s += indent + "  " + marshalGo(v, indent+"  ") + ",\n"
+			}
+			s += indent + "}"
+			return s
+		case []MergedCell:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]excelmetadata.MergedCell{\n"
+			for _, v := range val {
+				s += indent + "  " + marshalGo(v, indent+"  ") + ",\n"
+			}
+			s += indent + "}"
+			return s
+		case []DataValidation:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]excelmetadata.DataValidation{\n"
+			for _, v := range val {
+				s += indent + "  " + marshalGo(v, indent+"  ") + ",\n"
+			}
+			s += indent + "}"
+			return s
+		case []CellMetadata:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]excelmetadata.CellMetadata{\n"
+			for _, v := range val {
+				s += indent + "  " + marshalGo(v, indent+"  ") + ",\n"
+			}
+			s += indent + "}"
+			return s
+		case []ImageMetadata:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]excelmetadata.ImageMetadata{\n"
+			for _, v := range val {
+				s += indent + "  " + marshalGo(v, indent+"  ") + ",\n"
+			}
+			s += indent + "}"
+			return s
+		case []DefinedName:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]excelmetadata.DefinedName{\n"
+			for _, v := range val {
+				s += indent + "  " + marshalGo(v, indent+"  ") + ",\n"
+			}
+			s += indent + "}"
+			return s
+		case *SheetProtection:
+			if val == nil {
+				return "nil"
+			}
+			return "&excelmetadata.SheetProtection" + marshalGo(*val, indent)
+		case *FontStyle:
+			if val == nil {
+				return "nil"
+			}
+			return "&excelmetadata.FontStyle" + marshalGo(*val, indent)
+		case *FillStyle:
+			if val == nil {
+				return "nil"
+			}
+			return "&excelmetadata.FillStyle" + marshalGo(*val, indent)
+		case *AlignmentStyle:
+			if val == nil {
+				return "nil"
+			}
+			return "&excelmetadata.AlignmentStyle" + marshalGo(*val, indent)
+		case *Protection:
+			if val == nil {
+				return "nil"
+			}
+			return "&excelmetadata.Protection" + marshalGo(*val, indent)
+		case *Hyperlink:
+			if val == nil {
+				return "nil"
+			}
+			return "&excelmetadata.Hyperlink" + marshalGo(*val, indent)
+		case *ImageFormat:
+			if val == nil {
+				return "nil"
+			}
+			return "&excelmetadata.ImageFormat" + marshalGo(*val, indent)
+		case StyleDetails:
+			s := "excelmetadata.StyleDetails{\n"
+			s += indent + "  Font: " + marshalGo(val.Font, indent+"  ") + ",\n"
+			s += indent + "  Fill: " + marshalGo(val.Fill, indent+"  ") + ",\n"
+			s += indent + "  Border: " + marshalGo(val.Border, indent+"  ") + ",\n"
+			s += indent + "  Alignment: " + marshalGo(val.Alignment, indent+"  ") + ",\n"
+			s += indent + "  NumberFormat: " + marshalGo(val.NumberFormat, indent+"  ") + ",\n"
+			s += indent + "  Protection: " + marshalGo(val.Protection, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case FontStyle:
+			s := "excelmetadata.FontStyle{\n"
+			s += indent + "  Bold: " + marshalGo(val.Bold, indent+"  ") + ",\n"
+			s += indent + "  Italic: " + marshalGo(val.Italic, indent+"  ") + ",\n"
+			s += indent + "  Underline: " + marshalGo(val.Underline, indent+"  ") + ",\n"
+			s += indent + "  Strike: " + marshalGo(val.Strike, indent+"  ") + ",\n"
+			s += indent + "  Family: " + marshalGo(val.Family, indent+"  ") + ",\n"
+			s += indent + "  Size: " + marshalGo(val.Size, indent+"  ") + ",\n"
+			s += indent + "  Color: " + marshalGo(val.Color, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case FillStyle:
+			s := "excelmetadata.FillStyle{\n"
+			s += indent + "  Type: " + marshalGo(val.Type, indent+"  ") + ",\n"
+			s += indent + "  Pattern: " + marshalGo(val.Pattern, indent+"  ") + ",\n"
+			s += indent + "  Color: " + marshalGo(val.Color, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case []BorderStyle:
+			if len(val) == 0 {
+				return "nil"
+			}
+			s := "[]excelmetadata.BorderStyle{\n"
+			for _, v := range val {
+				s += indent + "  " + marshalGo(v, indent+"  ") + ",\n"
+			}
+			s += indent + "}"
+			return s
+		case BorderStyle:
+			s := "excelmetadata.BorderStyle{\n"
+			s += indent + "  Type: " + marshalGo(val.Type, indent+"  ") + ",\n"
+			s += indent + "  Color: " + marshalGo(val.Color, indent+"  ") + ",\n"
+			s += indent + "  Style: " + marshalGo(val.Style, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case AlignmentStyle:
+			s := "excelmetadata.AlignmentStyle{\n"
+			s += indent + "  Horizontal: " + marshalGo(val.Horizontal, indent+"  ") + ",\n"
+			s += indent + "  Vertical: " + marshalGo(val.Vertical, indent+"  ") + ",\n"
+			s += indent + "  WrapText: " + marshalGo(val.WrapText, indent+"  ") + ",\n"
+			s += indent + "  TextRotation: " + marshalGo(val.TextRotation, indent+"  ") + ",\n"
+			s += indent + "  Indent: " + marshalGo(val.Indent, indent+"  ") + ",\n"
+			s += indent + "  ShrinkToFit: " + marshalGo(val.ShrinkToFit, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case Protection:
+			s := "excelmetadata.Protection{\n"
+			s += indent + "  Hidden: " + marshalGo(val.Hidden, indent+"  ") + ",\n"
+			s += indent + "  Locked: " + marshalGo(val.Locked, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case SheetMetadata:
+			s := "excelmetadata.SheetMetadata{\n"
+			s += indent + "  Index: " + marshalGo(val.Index, indent+"  ") + ",\n"
+			s += indent + "  Name: " + marshalGo(val.Name, indent+"  ") + ",\n"
+			s += indent + "  Visible: " + marshalGo(val.Visible, indent+"  ") + ",\n"
+			s += indent + "  Dimensions: " + marshalGo(val.Dimensions, indent+"  ") + ",\n"
+			s += indent + "  MergedCells: " + marshalGo(val.MergedCells, indent+"  ") + ",\n"
+			s += indent + "  DataValidations: " + marshalGo(val.DataValidations, indent+"  ") + ",\n"
+			s += indent + "  Protection: " + marshalGo(val.Protection, indent+"  ") + ",\n"
+			s += indent + "  RowHeights: " + marshalGo(val.RowHeights, indent+"  ") + ",\n"
+			s += indent + "  ColWidths: " + marshalGo(val.ColWidths, indent+"  ") + ",\n"
+			s += indent + "  Cells: " + marshalGo(val.Cells, indent+"  ") + ",\n"
+			s += indent + "  Images: " + marshalGo(val.Images, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case SheetDimensions:
+			s := "excelmetadata.SheetDimensions{\n"
+			s += indent + "  StartCell: " + marshalGo(val.StartCell, indent+"  ") + ",\n"
+			s += indent + "  EndCell: " + marshalGo(val.EndCell, indent+"  ") + ",\n"
+			s += indent + "  RowCount: " + marshalGo(val.RowCount, indent+"  ") + ",\n"
+			s += indent + "  ColCount: " + marshalGo(val.ColCount, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case MergedCell:
+			s := "excelmetadata.MergedCell{\n"
+			s += indent + "  StartCell: " + marshalGo(val.StartCell, indent+"  ") + ",\n"
+			s += indent + "  EndCell: " + marshalGo(val.EndCell, indent+"  ") + ",\n"
+			s += indent + "  Value: " + marshalGo(val.Value, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case DataValidation:
+			s := "excelmetadata.DataValidation{\n"
+			s += indent + "  Range: " + marshalGo(val.Range, indent+"  ") + ",\n"
+			s += indent + "  Type: " + marshalGo(val.Type, indent+"  ") + ",\n"
+			s += indent + "  Operator: " + marshalGo(val.Operator, indent+"  ") + ",\n"
+			s += indent + "  Formula1: " + marshalGo(val.Formula1, indent+"  ") + ",\n"
+			s += indent + "  Formula2: " + marshalGo(val.Formula2, indent+"  ") + ",\n"
+			s += indent + "  ShowError: " + marshalGo(val.ShowError, indent+"  ") + ",\n"
+			s += indent + "  ErrorTitle: " + marshalGo(val.ErrorTitle, indent+"  ") + ",\n"
+			s += indent + "  ErrorMessage: " + marshalGo(val.ErrorMessage, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case SheetProtection:
+			s := "excelmetadata.SheetProtection{\n"
+			s += indent + "  Protected: " + marshalGo(val.Protected, indent+"  ") + ",\n"
+			s += indent + "  Password: " + marshalGo(val.Password, indent+"  ") + ",\n"
+			s += indent + "  EditObjects: " + marshalGo(val.EditObjects, indent+"  ") + ",\n"
+			s += indent + "  EditScenarios: " + marshalGo(val.EditScenarios, indent+"  ") + ",\n"
+			s += indent + "  SelectLockedCells: " + marshalGo(val.SelectLockedCells, indent+"  ") + ",\n"
+			s += indent + "  SelectUnlockedCells: " + marshalGo(val.SelectUnlockedCells, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case CellMetadata:
+			s := "excelmetadata.CellMetadata{\n"
+			s += indent + "  Address: " + marshalGo(val.Address, indent+"  ") + ",\n"
+			s += indent + "  Value: " + marshalGo(val.Value, indent+"  ") + ",\n"
+			s += indent + "  Formula: " + marshalGo(val.Formula, indent+"  ") + ",\n"
+			s += indent + "  StyleID: " + marshalGo(val.StyleID, indent+"  ") + ",\n"
+			s += indent + "  Type: " + fmt.Sprintf("excelize.CellType(%q)", string(val.Type)) + ",\n"
+			s += indent + "  Hyperlink: " + marshalGo(val.Hyperlink, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case Hyperlink:
+			s := "excelmetadata.Hyperlink{\n"
+			s += indent + "  Link: " + marshalGo(val.Link, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case ImageMetadata:
+			s := "excelmetadata.ImageMetadata{\n"
+			s += indent + "  Cell: " + marshalGo(val.Cell, indent+"  ") + ",\n"
+			s += indent + "  File: " + marshalGo(val.File, indent+"  ") + ",\n"
+			s += indent + "  Extension: " + marshalGo(val.Extension, indent+"  ") + ",\n"
+			s += indent + "  InsertType: " + fmt.Sprintf("%#v", val.InsertType) + ",\n"
+			s += indent + "  Format: " + marshalGo(val.Format, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case ImageFormat:
+			s := "excelmetadata.ImageFormat{\n"
+			s += indent + "  AltText: " + marshalGo(val.AltText, indent+"  ") + ",\n"
+			s += indent + "  PrintObject: " + marshalGo(val.PrintObject, indent+"  ") + ",\n"
+			s += indent + "  Locked: " + marshalGo(val.Locked, indent+"  ") + ",\n"
+			s += indent + "  LockAspectRatio: " + marshalGo(val.LockAspectRatio, indent+"  ") + ",\n"
+			s += indent + "  AutoFit: " + marshalGo(val.AutoFit, indent+"  ") + ",\n"
+			s += indent + "  AutoFitIgnoreAspect: " + marshalGo(val.AutoFitIgnoreAspect, indent+"  ") + ",\n"
+			s += indent + "  OffsetX: " + marshalGo(val.OffsetX, indent+"  ") + ",\n"
+			s += indent + "  OffsetY: " + marshalGo(val.OffsetY, indent+"  ") + ",\n"
+			s += indent + "  ScaleX: " + marshalGo(val.ScaleX, indent+"  ") + ",\n"
+			s += indent + "  ScaleY: " + marshalGo(val.ScaleY, indent+"  ") + ",\n"
+			s += indent + "  Hyperlink: " + marshalGo(val.Hyperlink, indent+"  ") + ",\n"
+			s += indent + "  HyperlinkType: " + marshalGo(val.HyperlinkType, indent+"  ") + ",\n"
+			s += indent + "  Positioning: " + marshalGo(val.Positioning, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case DefinedName:
+			s := "excelmetadata.DefinedName{\n"
+			s += indent + "  Name: " + marshalGo(val.Name, indent+"  ") + ",\n"
+			s += indent + "  RefersTo: " + marshalGo(val.RefersTo, indent+"  ") + ",\n"
+			s += indent + "  Scope: " + marshalGo(val.Scope, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case DocumentProperties:
+			s := "excelmetadata.DocumentProperties{\n"
+			s += indent + "  Title: " + marshalGo(val.Title, indent+"  ") + ",\n"
+			s += indent + "  Subject: " + marshalGo(val.Subject, indent+"  ") + ",\n"
+			s += indent + "  Creator: " + marshalGo(val.Creator, indent+"  ") + ",\n"
+			s += indent + "  Keywords: " + marshalGo(val.Keywords, indent+"  ") + ",\n"
+			s += indent + "  Description: " + marshalGo(val.Description, indent+"  ") + ",\n"
+			s += indent + "  LastModifiedBy: " + marshalGo(val.LastModifiedBy, indent+"  ") + ",\n"
+			s += indent + "  Category: " + marshalGo(val.Category, indent+"  ") + ",\n"
+			s += indent + "  Version: " + marshalGo(val.Version, indent+"  ") + ",\n"
+			s += indent + "  Created: " + marshalGo(val.Created, indent+"  ") + ",\n"
+			s += indent + "  Modified: " + marshalGo(val.Modified, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		case Metadata:
+			s := "excelmetadata.Metadata{\n"
+			s += indent + "  Filename: " + marshalGo(val.Filename, indent+"  ") + ",\n"
+			s += indent + "  Properties: " + marshalGo(val.Properties, indent+"  ") + ",\n"
+			s += indent + "  Sheets: " + marshalGo(val.Sheets, indent+"  ") + ",\n"
+			s += indent + "  DefinedNames: " + marshalGo(val.DefinedNames, indent+"  ") + ",\n"
+			s += indent + "  Styles: " + marshalGo(val.Styles, indent+"  ") + ",\n"
+			s += indent + "  ExtractedAt: " + marshalGo(val.ExtractedAt, indent+"  ") + ",\n"
+			s += indent + "}"
+			return s
+		default:
+			return fmt.Sprintf("%#v", v)
+		}
+	}
+
+	goStr := "metadata := &" + marshalGo(*metadata, "") + "\n\n"
+	goStr += "recreator = excelrecreator.New(metadata, nil)\n"
+
+	return goStr, nil
+}
+
+// ExtractToFile extracts metadata and saves it to a JSON or GO file
+func (e *Extractor) ExtractToFile(outputPath string, pretty bool) error {
+	ext := path.Ext(outputPath)
+	var data []byte
+	if ext == ".json" {
+		jsonStr, err := e.ExtractToJSON(pretty)
+		if err != nil {
+			return err
+		}
+		data = []byte(jsonStr)
+	} else if ext == ".go" {
+		goStr, err := e.ExtractToGO()
+		if err != nil {
+			return err
+		}
+		data = []byte(goStr)
+	} else {
+		return errors.New(fmt.Sprintf("unsupported %s file", ext))
+	}
+
+	dir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(outputPath, []byte(jsonStr), 0644)
+	return os.WriteFile(outputPath, data, 0644)
 }
 
 // Close closes the underlying Excel file
@@ -657,7 +1054,9 @@ func QuickExtract(filename string) (*Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer extractor.Close()
+	defer func(extractor *Extractor) {
+		_ = extractor.Close()
+	}(extractor)
 
 	return extractor.Extract()
 }
@@ -668,18 +1067,35 @@ func QuickExtractToJSON(filename string, pretty bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer extractor.Close()
+	defer func(extractor *Extractor) {
+		_ = extractor.Close()
+	}(extractor)
 
 	return extractor.ExtractToJSON(pretty)
 }
 
+// QuickExtractToGO is a convenience function for extracting to GO
+func QuickExtractToGO(filename string) (string, error) {
+	extractor, err := New(filename, DefaultOptions())
+	if err != nil {
+		return "", err
+	}
+	defer func(extractor *Extractor) {
+		_ = extractor.Close()
+	}(extractor)
+
+	return extractor.ExtractToGO()
+}
+
 // QuickExtractToFile is a convenience function for extracting to a JSON file
-func QuickExtractToFile(excelFile, jsonFile string, pretty bool) error {
+func QuickExtractToFile(excelFile, file string, pretty bool) error {
 	extractor, err := New(excelFile, DefaultOptions())
 	if err != nil {
 		return err
 	}
-	defer extractor.Close()
+	defer func(extractor *Extractor) {
+		_ = extractor.Close()
+	}(extractor)
 
-	return extractor.ExtractToFile(jsonFile, pretty)
+	return extractor.ExtractToFile(file, pretty)
 }

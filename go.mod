@@ -5,6 +5,7 @@ go 1.23.4
 require github.com/xuri/excelize/v2 v2.9.1
 
 require (
+	github.com/pkg/errors v0.9.1
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/tiendc/go-deepcopy v1.6.0 // indirect
