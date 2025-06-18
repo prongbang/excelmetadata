@@ -38,7 +38,7 @@ go get github.com/prongbang/excelmetadata
 ### CLI
 
 ```bash
-go install github.com/prongbang/excelmetadata/cmd/excelmetadata@v1.2.3
+go install github.com/prongbang/excelmetadata/cmd/excelmetadata@v1.2.4
 ```
 
 - Extraction
@@ -46,13 +46,13 @@ go install github.com/prongbang/excelmetadata/cmd/excelmetadata@v1.2.3
 GO
 
 ```bash
-excelmetadata extract sample.xlsx -o sample_metadata.go
+excelmetadata extract -o sample_metadata.go sample.xlsx
 ```
 
 JSON
 
 ```bash
-excelmetadata extract sample.xlsx -o sample.metadata.json
+excelmetadata extract -o sample.metadata.json sample.xlsx
 ```
 
 ## Requirements

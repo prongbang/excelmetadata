@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,166 +9,122 @@ import (
 	"strings"
 
 	"github.com/prongbang/excelmetadata"
+	"github.com/urfave/cli/v2"
 )
 
 const version = "v1.0.3"
 
-type CommandFlags struct {
-	// Extract command flags
-	outputFile  string
-	prettyPrint bool
-	maxCells    int
-	noStyles    bool
-	noImages    bool
-	inputFile   string
-	command     string
-	// Compare command flags
-	file1       string
-	file2       string
-	showDetails bool
-	// Search command flags
-	searchDir       string
-	searchPattern   string
-	searchRecursive bool
-}
-
 func main() {
-	flags := parseFlags()
+	app := &cli.App{
+		Name:    "excelmetadata",
+		Usage:   "Excel Metadata CLI Tool",
+		Version: version,
+		Commands: []*cli.Command{
+			{
+				Name:    "extract",
+				Aliases: []string{"e"},
+				Usage:   "Extract metadata from Excel file",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "output",
+						Aliases: []string{"o"},
+						Usage:   "Output JSON file path",
+					},
+					&cli.BoolFlag{
+						Name:    "pretty",
+						Aliases: []string{"p"},
+						Usage:   "Pretty print JSON output",
+					},
+					&cli.IntFlag{
+						Name:    "max-cells",
+						Aliases: []string{"m"},
+						Usage:   "Maximum cells per sheet (0 for unlimited)",
+						Value:   0,
+					},
+					&cli.BoolFlag{
+						Name:  "no-styles",
+						Usage: "Exclude styles from extraction",
+					},
+					&cli.BoolFlag{
+						Name:  "no-images",
+						Usage: "Exclude images from extraction",
+					},
+				},
+				Action: handleExtract,
+			},
+			{
+				Name:    "compare",
+				Aliases: []string{"c"},
+				Usage:   "Compare two Excel files",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "detail",
+						Aliases: []string{"d"},
+						Usage:   "Show detailed comparison",
+					},
+				},
+				Action: handleCompare,
+			},
+			{
+				Name:    "search",
+				Aliases: []string{"s"},
+				Usage:   "Search Excel files in directory",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "pattern",
+						Aliases: []string{"p"},
+						Usage:   "Search pattern",
+					},
+					&cli.BoolFlag{
+						Name:    "recursive",
+						Aliases: []string{"r"},
+						Usage:   "Search in subdirectories",
+					},
+				},
+				Action: handleSearch,
+			},
+		},
+	}
 
-	switch flags.command {
-	case "extract":
-		if err := handleExtract(flags); err != nil {
-			log.Fatal(err)
-		}
-	case "compare":
-		if err := handleCompare(flags); err != nil {
-			log.Fatal(err)
-		}
-	case "search":
-		if err := handleSearch(flags); err != nil {
-			log.Fatal(err)
-		}
-	case "version":
-		fmt.Printf("excelmetada version %s\n", version)
-	default:
-		fmt.Printf("Unknown command: %s\n", flags.command)
-		printUsage()
-		os.Exit(1)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
 	}
 }
 
-func parseFlags() *CommandFlags {
-	flags := &CommandFlags{}
-
-	// Define command-line flags
-	extractCmd := flag.NewFlagSet("extract", flag.ExitOnError)
-	extractCmd.StringVar(&flags.outputFile, "output", "", "Output JSON file path")
-	extractCmd.StringVar(&flags.outputFile, "o", "", "Output JSON file path (shorthand)")
-	extractCmd.BoolVar(&flags.prettyPrint, "pretty", false, "Pretty print JSON output")
-	extractCmd.BoolVar(&flags.prettyPrint, "p", false, "Pretty print JSON output (shorthand)")
-	extractCmd.IntVar(&flags.maxCells, "max-cells", 0, "Maximum cells per sheet (0 for unlimited)")
-	extractCmd.IntVar(&flags.maxCells, "m", 0, "Maximum cells per sheet (shorthand)")
-	extractCmd.BoolVar(&flags.noStyles, "no-styles", false, "Exclude styles from extraction")
-	extractCmd.BoolVar(&flags.noImages, "no-images", false, "Exclude images from extraction")
-
-	compareCmd := flag.NewFlagSet("compare", flag.ExitOnError)
-	compareCmd.BoolVar(&flags.showDetails, "detail", false, "Show detailed comparison")
-	compareCmd.BoolVar(&flags.showDetails, "d", false, "Show detailed comparison (shorthand)")
-
-	searchCmd := flag.NewFlagSet("search", flag.ExitOnError)
-	searchCmd.StringVar(&flags.searchPattern, "pattern", "", "Search pattern")
-	searchCmd.StringVar(&flags.searchPattern, "p", "", "Search pattern (shorthand)")
-	searchCmd.BoolVar(&flags.searchRecursive, "recursive", false, "Search in subdirectories")
-	searchCmd.BoolVar(&flags.searchRecursive, "r", false, "Search in subdirectories (shorthand)")
-
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
-
-	flags.command = os.Args[1]
-
-	switch flags.command {
-	case "extract":
-		extractCmd.Parse(os.Args[2:])
-		if extractCmd.NArg() > 0 {
-			flags.inputFile = extractCmd.Arg(0)
-		}
-	case "compare":
-		compareCmd.Parse(os.Args[2:])
-		if compareCmd.NArg() > 1 {
-			flags.file1 = compareCmd.Arg(0)
-			flags.file2 = compareCmd.Arg(1)
-		}
-	case "search":
-		searchCmd.Parse(os.Args[2:])
-		if searchCmd.NArg() > 0 {
-			flags.searchDir = searchCmd.Arg(0)
-		}
-	case "version":
-		fmt.Println(version)
-	default:
-		printUsage()
-		os.Exit(1)
-	}
-
-	return flags
-}
-
-func printUsage() {
-	fmt.Println(`Excel Metadata CLI Tool
-
-Usage:
-  excelmetadata <command> [flags]
-
-Commands:
-  extract     Extract metadata from Excel file
-             excelmetadata extract [-o output] [-p] [-m max-cells] [--no-styles] [--no-images] <file>
-
-  compare     Compare two Excel files
-             excelmetadata compare [-d] <file1> <file2>
-
-  search      Search Excel files in directory
-             excelmetadata search [-p pattern] [-r] <directory>
-
-  version     Show version information
-
-Examples:
-  excelmetadata extract -o metadata.json -p input.xlsx
-  excelmetadata compare -d file1.xlsx file2.xlsx
-  excelmetadata search -p "Sales" -r /path/to/documents
-`)
-}
-
-func handleExtract(flags *CommandFlags) error {
-	if flags.inputFile == "" {
+func handleExtract(c *cli.Context) error {
+	inputFile := c.Args().First()
+	if inputFile == "" {
 		return fmt.Errorf("please provide an input file")
 	}
 
 	options := &excelmetadata.Options{
 		IncludeCellData:       true,
-		IncludeStyles:         !flags.noStyles,
-		IncludeImages:         !flags.noImages,
+		IncludeStyles:         !c.Bool("no-styles"),
+		IncludeImages:         !c.Bool("no-images"),
 		IncludeDefinedNames:   true,
 		IncludeDataValidation: true,
-		MaxCellsPerSheet:      flags.maxCells,
+		MaxCellsPerSheet:      c.Int("max-cells"),
 	}
 
-	extractor, err := excelmetadata.New(flags.inputFile, options)
+	extractor, err := excelmetadata.New(inputFile, options)
 	if err != nil {
 		return fmt.Errorf("failed to create extractor: %v", err)
 	}
-	defer extractor.Close()
+	defer func(extractor *excelmetadata.Extractor) {
+		_ = extractor.Close()
+	}(extractor)
 
 	metadata, err := extractor.Extract()
 	if err != nil {
 		return fmt.Errorf("failed to extract metadata: %v", err)
 	}
 
-	if flags.outputFile == "" {
+	outputFile := c.String("output")
+	fmt.Println("output file:", outputFile)
+	if outputFile == "" {
 		// Print to stdout
 		var jsonData []byte
-		if flags.prettyPrint {
+		if c.Bool("pretty") {
 			jsonData, err = json.MarshalIndent(metadata, "", "  ")
 		} else {
 			jsonData, err = json.Marshal(metadata)
@@ -180,35 +135,38 @@ func handleExtract(flags *CommandFlags) error {
 		fmt.Println(string(jsonData))
 	} else {
 		// Save to file
-		err = excelmetadata.QuickExtractToFile(flags.inputFile, flags.outputFile, flags.prettyPrint)
+		err = excelmetadata.QuickExtractToFile(inputFile, outputFile, c.Bool("pretty"))
 		if err != nil {
 			return fmt.Errorf("failed to save to file: %v", err)
 		}
-		fmt.Printf("Metadata saved to %s\n", flags.outputFile)
+		fmt.Printf("Metadata saved to %s\n", outputFile)
 	}
 
 	return nil
 }
 
-func handleCompare(flags *CommandFlags) error {
-	if flags.file1 == "" || flags.file2 == "" {
+func handleCompare(c *cli.Context) error {
+	if c.Args().Len() < 2 {
 		return fmt.Errorf("please provide two files to compare")
 	}
 
-	metadata1, err := excelmetadata.QuickExtract(flags.file1)
+	file1 := c.Args().Get(0)
+	file2 := c.Args().Get(1)
+
+	metadata1, err := excelmetadata.QuickExtract(file1)
 	if err != nil {
-		return fmt.Errorf("failed to extract metadata from %s: %v", flags.file1, err)
+		return fmt.Errorf("failed to extract metadata from %s: %v", file1, err)
 	}
 
-	metadata2, err := excelmetadata.QuickExtract(flags.file2)
+	metadata2, err := excelmetadata.QuickExtract(file2)
 	if err != nil {
-		return fmt.Errorf("failed to extract metadata from %s: %v", flags.file2, err)
+		return fmt.Errorf("failed to extract metadata from %s: %v", file2, err)
 	}
 
-	fmt.Printf("Comparing %s with %s:\n", flags.file1, flags.file2)
+	fmt.Printf("Comparing %s with %s:\n", file1, file2)
 	fmt.Printf("Sheets: %d vs %d\n", len(metadata1.Sheets), len(metadata2.Sheets))
 
-	if flags.showDetails {
+	if c.Bool("detail") {
 		for i, sheet1 := range metadata1.Sheets {
 			if i < len(metadata2.Sheets) {
 				sheet2 := metadata2.Sheets[i]
@@ -222,12 +180,14 @@ func handleCompare(flags *CommandFlags) error {
 	return nil
 }
 
-func handleSearch(flags *CommandFlags) error {
-	if flags.searchDir == "" {
+func handleSearch(c *cli.Context) error {
+	searchDir := c.Args().First()
+	if searchDir == "" {
 		return fmt.Errorf("please provide a directory to search")
 	}
 
-	if flags.searchPattern == "" {
+	searchPattern := c.String("pattern")
+	if searchPattern == "" {
 		return fmt.Errorf("please provide a search pattern")
 	}
 
@@ -242,18 +202,18 @@ func handleSearch(flags *CommandFlags) error {
 				return nil
 			}
 
-			if searchInMetadata(metadata, flags.searchPattern) {
+			if searchInMetadata(metadata, searchPattern) {
 				fmt.Printf("Match found in: %s\n", path)
 			}
 		}
 		return nil
 	}
 
-	if flags.searchRecursive {
-		return filepath.Walk(flags.searchDir, walkFunc)
+	if c.Bool("recursive") {
+		return filepath.Walk(searchDir, walkFunc)
 	}
 
-	files, err := filepath.Glob(filepath.Join(flags.searchDir, "*.xlsx"))
+	files, err := filepath.Glob(filepath.Join(searchDir, "*.xlsx"))
 	if err != nil {
 		return fmt.Errorf("failed to list Excel files: %v", err)
 	}
