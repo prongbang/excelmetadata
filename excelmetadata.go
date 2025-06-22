@@ -661,8 +661,31 @@ func (e *Extractor) ExtractToGO() (string, error) {
 		}
 	}
 
-	goStr := "metadata := &" + marshalGo(*metadata, "") + "\n\n"
-	goStr += "recreator := excelrecreator.New(metadata, nil)\n"
+	goStr := fmt.Sprintf(`package main
+
+import (
+	"github.com/prongbang/excelmetadata"
+	"github.com/prongbang/excelrecreator"
+	"github.com/xuri/excelize/v2"
+)
+
+func main() {
+	f := excelize.NewFile()
+
+	metadata := &%s
+
+	reCreator := &excelrecreator.Recreator{
+		File:     f,
+		Metadata: metadata,
+		Options:  excelrecreator.DefaultOptions(),
+		StyleMap: make(map[int]int),
+	}
+	_ = reCreator.Recreate()
+
+	_ = f.SaveAs("sample.clone.xlsx")
+}`,
+		marshalGo(*metadata, ""),
+	)
 
 	return goStr, nil
 }
