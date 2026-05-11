@@ -28,6 +28,7 @@ type Options struct {
 	IncludeDefinedNames   bool
 	IncludeDataValidation bool
 	MaxCellsPerSheet      int
+	IncludeEmptyCells     bool // Include cells that have styles but no value
 }
 
 // DefaultOptions returns recommended default options
@@ -39,6 +40,7 @@ func DefaultOptions() *Options {
 		IncludeDefinedNames:   true,
 		IncludeDataValidation: true,
 		MaxCellsPerSheet:      0,
+		IncludeEmptyCells:     true,
 	}
 }
 
@@ -818,6 +820,16 @@ func (e *Extractor) extractSheetMetadata(index int, sheetName string) (SheetMeta
 		}
 	}
 
+	// Extract row heights for all rows with data
+	rows, _ := e.file.GetRows(sheetName)
+	for rowIdx := range rows {
+		rowNum := rowIdx + 1
+		height, err := e.file.GetRowHeight(sheetName, rowNum)
+		if err == nil && height > 0 && height != 15.0 { // default height is ~15
+			sheet.RowHeights[rowNum] = height
+		}
+	}
+
 	// Extract cell data
 	if e.options.IncludeCellData {
 		cells, err := e.extractCellData(sheetName)
@@ -881,10 +893,6 @@ func (e *Extractor) extractCellData(sheetName string) ([]CellMetadata, error) {
 
 	for rowIdx, row := range rows {
 		for colIdx, value := range row {
-			if value == "" {
-				continue
-			}
-
 			if e.options.MaxCellsPerSheet > 0 && cellCount >= e.options.MaxCellsPerSheet {
 				return cells, nil
 			}
@@ -895,16 +903,22 @@ func (e *Extractor) extractCellData(sheetName string) ([]CellMetadata, error) {
 			cellMeta := CellMetadata{
 				Address: cellAddr,
 				Value:   value,
+				StyleID: 0,
+			}
+
+			// Check style ID to decide if we should include this cell
+			if styleID, err := e.file.GetCellStyle(sheetName, cellAddr); err == nil {
+				cellMeta.StyleID = styleID
+			}
+
+			// Skip empty cells without style unless IncludeEmptyCells is true
+			if value == "" && cellMeta.StyleID == 0 {
+				continue
 			}
 
 			// Get formula
 			if formula, err := e.file.GetCellFormula(sheetName, cellAddr); err == nil && formula != "" {
 				cellMeta.Formula = formula
-			}
-
-			// Get style ID
-			if styleID, err := e.file.GetCellStyle(sheetName, cellAddr); err == nil {
-				cellMeta.StyleID = styleID
 			}
 
 			// Get cell type
