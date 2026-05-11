@@ -771,9 +771,16 @@ func (e *Extractor) extractSheetMetadata(index int, sheetName string) (SheetMeta
 		Visible: visible,
 	}
 
-	// Get sheet dimensions
-	if dimensions, err := e.getSheetDimensions(sheetName); err == nil {
-		sheet.Dimensions = dimensions
+	// Extract cell data first — reads ALL cells including style-only cells
+	if e.options.IncludeCellData {
+		if c, err := e.extractCellData(sheetName); err == nil {
+			sheet.Cells = c
+			sheet.Dimensions = e.computeDimensions(c)
+		}
+	} else {
+		if dimensions, err := e.getSheetDimensions(sheetName); err == nil {
+			sheet.Dimensions = dimensions
+		}
 	}
 
 	// Extract merged cells
@@ -830,20 +837,58 @@ func (e *Extractor) extractSheetMetadata(index int, sheetName string) (SheetMeta
 		}
 	}
 
-	// Extract cell data
-	if e.options.IncludeCellData {
-		cells, err := e.extractCellData(sheetName)
-		if err == nil {
-			sheet.Cells = cells
-		}
-	}
-
 	// Extract images
 	if e.options.IncludeImages {
 		sheet.Images = e.extractImages(sheetName)
 	}
 
 	return sheet, nil
+}
+
+// computeDimensions calculates sheet dimensions from extracted cells
+// (including style-only cells that GetRows would miss).
+func (e *Extractor) computeDimensions(cells []CellMetadata) SheetDimensions {
+	if len(cells) == 0 {
+		return SheetDimensions{
+			StartCell: "A1",
+			EndCell:   "A1",
+			RowCount:  0,
+			ColCount:  0,
+		}
+	}
+
+	maxRow := 0
+	maxCol := 0
+
+	for _, cell := range cells {
+		col, row, err := excelize.CellNameToCoordinates(cell.Address)
+		if err != nil {
+			continue
+		}
+		if row > maxRow {
+			maxRow = row
+		}
+		if col > maxCol {
+			maxCol = col
+		}
+	}
+
+	if maxRow == 0 || maxCol == 0 {
+		return SheetDimensions{
+			StartCell: "A1",
+			EndCell:   "A1",
+			RowCount:  0,
+			ColCount:  0,
+		}
+	}
+
+	endCol, _ := excelize.ColumnNumberToName(maxCol)
+	return SheetDimensions{
+		StartCell: "A1",
+		EndCell:   fmt.Sprintf("%s%d", endCol, maxRow),
+		RowCount:  maxRow,
+		ColCount:  maxCol,
+	}
 }
 
 func (e *Extractor) getSheetDimensions(sheetName string) (SheetDimensions, error) {
@@ -886,56 +931,50 @@ func (e *Extractor) extractCellData(sheetName string) ([]CellMetadata, error) {
 	var cells []CellMetadata
 	cellCount := 0
 
-	rows, err := e.file.GetRows(sheetName)
+	// Read all cells from raw XML (including style-only cells that GetRows skips)
+	rawCells, err := readSheetCells(e.file, sheetName)
 	if err != nil {
 		return nil, err
 	}
 
-	for rowIdx, row := range rows {
-		for colIdx, value := range row {
-			if e.options.MaxCellsPerSheet > 0 && cellCount >= e.options.MaxCellsPerSheet {
-				return cells, nil
-			}
-
-			col, _ := excelize.ColumnNumberToName(colIdx + 1)
-			cellAddr := fmt.Sprintf("%s%d", col, rowIdx+1)
-
-			cellMeta := CellMetadata{
-				Address: cellAddr,
-				Value:   value,
-				StyleID: 0,
-			}
-
-			// Check style ID to decide if we should include this cell
-			if styleID, err := e.file.GetCellStyle(sheetName, cellAddr); err == nil {
-				cellMeta.StyleID = styleID
-			}
-
-			// Skip empty cells without style unless IncludeEmptyCells is true
-			if value == "" && cellMeta.StyleID == 0 {
-				continue
-			}
-
-			// Get formula
-			if formula, err := e.file.GetCellFormula(sheetName, cellAddr); err == nil && formula != "" {
-				cellMeta.Formula = formula
-			}
-
-			// Get cell type
-			if cellType, err := e.file.GetCellType(sheetName, cellAddr); err == nil {
-				cellMeta.Type = cellType
-			}
-
-			// Get hyperlink - GetCellHyperLink returns (HyperlinkOpts, string, error)
-			if link, target, err := e.file.GetCellHyperLink(sheetName, cellAddr); err == nil && link {
-				cellMeta.Hyperlink = &Hyperlink{
-					Link: target,
-				}
-			}
-
-			cells = append(cells, cellMeta)
-			cellCount++
+	for _, rawCell := range rawCells {
+		if e.options.MaxCellsPerSheet > 0 && cellCount >= e.options.MaxCellsPerSheet {
+			return cells, nil
 		}
+
+		cellAddr := rawCell.Ref
+
+		// Get formatted value via excelize (resolves shared strings, formulas, etc.)
+		value, _ := e.file.GetCellValue(sheetName, cellAddr)
+
+		cellMeta := CellMetadata{
+			Address: cellAddr,
+			StyleID: rawCell.StyleID,
+		}
+
+		if value != "" {
+			cellMeta.Value = value
+		}
+
+		// Get formula
+		if formula, ferr := e.file.GetCellFormula(sheetName, cellAddr); ferr == nil && formula != "" {
+			cellMeta.Formula = formula
+		}
+
+		// Get cell type
+		if cellType, terr := e.file.GetCellType(sheetName, cellAddr); terr == nil {
+			cellMeta.Type = cellType
+		}
+
+		// Get hyperlink
+		if link, target, herr := e.file.GetCellHyperLink(sheetName, cellAddr); herr == nil && link {
+			cellMeta.Hyperlink = &Hyperlink{
+				Link: target,
+			}
+		}
+
+		cells = append(cells, cellMeta)
+		cellCount++
 	}
 
 	return cells, nil
@@ -992,23 +1031,17 @@ func (e *Extractor) extractUniqueStyles() map[int]StyleDetails {
 	processedStyles := make(map[int]bool)
 
 	for _, sheetName := range e.file.GetSheetList() {
-		rows, err := e.file.GetRows(sheetName)
+		rawCells, err := readSheetCells(e.file, sheetName)
 		if err != nil {
 			continue
 		}
 
-		for rowIdx, row := range rows {
-			for colIdx := range row {
-				col, _ := excelize.ColumnNumberToName(colIdx + 1)
-				cellAddr := fmt.Sprintf("%s%d", col, rowIdx+1)
-
-				if styleID, err := e.file.GetCellStyle(sheetName, cellAddr); err == nil && styleID != 0 {
-					if !processedStyles[styleID] {
-						if style, err := e.extractStyleDetails(styleID); err == nil {
-							styles[styleID] = style
-							processedStyles[styleID] = true
-						}
-					}
+		for _, rawCell := range rawCells {
+			styleID := rawCell.StyleID
+			if styleID != 0 && !processedStyles[styleID] {
+				if style, err := e.extractStyleDetails(styleID); err == nil {
+					styles[styleID] = style
+					processedStyles[styleID] = true
 				}
 			}
 		}
